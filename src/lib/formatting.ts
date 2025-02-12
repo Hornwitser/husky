@@ -34,6 +34,11 @@ export type ExclusiveTag = typeof exclusiveTags[number];
 const recognizedTags = [...booleanTags, ...exclusiveTags, "noparse", "url", "color"] as const;
 export type RecognizedTag = typeof recognizedTags[number];
 
+// Base type for all nodes that includes source location
+export type IndexedNode = {
+  index: number;
+}
+
 // Node types
 export type ContentNode = { content: string }
 export type ExclusiveRichNode = 
@@ -47,6 +52,7 @@ export type CombiningRichNode = ContentNode & {[K in BooleanTag]?: boolean} & {
 }
 
 export type RichNode = ExclusiveRichNode | CombiningRichNode
+export type IndexedRichNode = IndexedNode & RichNode
 
 // We can make a nice linear parser, because it's just a big FSM (with nested states)
 // And the state-nesting is just a stack, because all tags are optimistically balanced.
@@ -91,13 +97,14 @@ const noparseClosing = /\[\/(noparse)?\]/
 // - When we see a BBCode tag, we can immediately insert a new RichNode into the output array, using the subsequent text as the content, and adding the new formatting.
 // - When we see a closing tag, we do the same, but we clear the formatting associated with the tag.
 // - When we see a noparse tag, we can immediately skip to the closing noparse tag, and treat the text in between as a ContentNode.
-export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] { 
-  const output: RichNode[] = [];
+export function parseBBCode(input: string, useMarkdown: boolean): IndexedRichNode[] { 
+  const output: IndexedRichNode[] = [];
   
   // First pass: Extract noparse sections and add sentinels
   let intermediateText = "";
   let currentIndex = 0;
-  let noparseArray: string[] = [];
+  let virtualIndexOffset = 0;
+  let noparseArray: Array<string> = [];
   
   while (currentIndex < input.length) {
     if (input.startsWith("[noparse]", currentIndex)) {
@@ -118,17 +125,66 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
   }
 
   // Second pass: Convert Markdown to BBCode if enabled
+  let getAdjustedIndex = (pos: number): number => pos + virtualIndexOffset;
+  
   if (useMarkdown) {
-    // Replace markdown patterns with BBCode
-    // Always apply longer patterns first.
-    intermediateText = intermediateText
-      .replace(/\*\*\*(.+?)\*\*\*/g, '[b][i]$1[/i][/b]')
-      .replace(/\*\*(.+?)\*\*/g, '[b]$1[/b]')
-      .replace(/\*(.+?)\*/g, '[i]$1[/i]')
-      .replace(/__(.+?)__/g, '[u]$1[/u]')
-      .replace(/_(.+?)_/g, '[i]$1[/i]')
-      .replace(/~~(.+?)~~/g, '[s]$1[/s]')
-      .replace(/\|\|(.+?)\|\|/g, '[spoiler]$1[/spoiler]');
+    const substitutions = [
+      { md: /\*\*\*(.+?)\*\*\*/g, bb: '[b][i]$1[/i][/b]', mdLen: 3, offset: 2 },
+      { md: /\*\*(.+?)\*\*/g, bb: '[b]$1[/b]', mdLen: 2, offset: 1 },
+      { md: /\*(.+?)\*/g, bb: '[i]$1[/i]', mdLen: 1, offset: 1 },
+      { md: /__(.+?)__/g, bb: '[u]$1[/u]', mdLen: 2, offset: 1 },
+      { md: /_(.+?)_/g, bb: '[i]$1[/i]', mdLen: 1, offset: 1 },
+      { md: /~~(.+?)~~/g, bb: '[s]$1[/s]', mdLen: 2, offset: 1 },
+      { md: /\|\|(.+?)\|\|/g, bb: '[spoiler]$1[/spoiler]', mdLen: 2, offset: 1 }
+    ];
+
+    type TagInfo = [number, number]; // [index, offset]
+    const tagPositions: TagInfo[] = [];
+    const runningTagPositions: TagInfo[] = [];
+
+    // Swap out the getAdjustedIndex function.
+    getAdjustedIndex = (pos: number): number => {
+      // Find the last tag position that is less than or equal to the position.
+      const tagPosition = runningTagPositions.findLast(tp => tp[0] <= pos);
+      return pos + virtualIndexOffset - (tagPosition?.[1] ?? 0);
+    }
+
+    // We work as follows:
+    // Imagining the following text:
+    //            1         2         3         4
+    //  01234567890123456789012345678901234567890123
+    // "**one _two_ [u]three[/u] four** five"
+    // "[b]one [i]two[/i] [u]three[/u] four[/b] five"
+    //    ^    ^       ^         ^      ^
+    //     ^      ^          ^         ^        ^
+    //    +1   ==+3    =====+6   =====+6=======+8
+    //    +1     +2         +3        +0       +2
+    // We assume that we're replacing every occurrence of each substitution, so the final tallies will be the same
+    // We iterate through the substitutions, matching their source locations, and their offsets.
+    // For each match, we're adding two entries:
+    // - Where the match starts
+    // - Where the match ends
+    // This is to add offsets for the opening and closing tags both.
+    // bbLen is (bb.length-2-offset)/2 for opening, and +offset again for closing.
+    // We can gather all of the tags within a group and order them, but they need to be offset by the running total from the previous groups.
+    substitutions.forEach(({ md, mdLen, bb, offset }) => {
+      intermediateText = intermediateText.replace(md, (match, m1, index) => {
+        const bbLen = (bb.length-2-offset)/2;
+        tagPositions.push([getAdjustedIndex(index + mdLen), bbLen - mdLen]);
+        tagPositions.push([getAdjustedIndex(index + match.length - mdLen), bbLen+offset-mdLen]);
+        return bb.replace('$1', m1);
+      });
+
+      // Sort the tag positions by index.
+      tagPositions.sort((a, b) => a[0] - b[0]);
+
+      // Rebuild the running tag positions.
+      for (let i = 0; i < tagPositions.length; i++) {
+        // Add the offset to the running total, and offset the index by the same running total.
+        const lastOffset = runningTagPositions[i-1]?.[1] ?? 0;
+        runningTagPositions[i] = [tagPositions[i][0] + lastOffset, tagPositions[i][1] + lastOffset];
+      }
+    });
   }
 
   // Third pass: Convert BBCode to RichNodes
@@ -148,15 +204,17 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
       if (pendingContent) {
         output.push({
           ...currentFormatting,
-          content: pendingContent
+          content: pendingContent,
+          index: getAdjustedIndex(lastIndex)
         });
       }
 
       // Push noparse content with same formatting
-      const noparseContent = noparseArray[noparseArrayIndex];
+      const content = noparseArray[noparseArrayIndex];
       output.push({
         ...currentFormatting,
-        content: noparseContent,
+        content,
+        index: getAdjustedIndex(currentIndex + 9),
         noparse: true
       });
       noparseArrayIndex++;
@@ -167,6 +225,7 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
 
       // Skip past sentinel and update lastIndex
       currentIndex += 2;
+      virtualIndexOffset += content.length + 9 + 10 - 2; // [noparse] + [/noparse] - sentinel
       lastIndex = currentIndex;
       continue;
     }
@@ -190,7 +249,8 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
         if (pendingContent) {
           output.push({
             ...currentFormatting,
-            content: pendingContent
+            content: pendingContent,
+            index: getAdjustedIndex(lastIndex)
           });
         }
         
@@ -206,7 +266,7 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
             // Support [/] smart-closing tag.
             if (closeMatch[1] === tag || !closeMatch[1]) {
               const content = intermediateText.slice(currentIndex, searchIndex + closeMatch.index!);
-              output.push({ [tag]: content } as RichNode);
+              output.push({ [tag]: content, index: getAdjustedIndex(currentIndex) } as IndexedRichNode);
               currentIndex = searchIndex + closeMatch.index! + closeMatch[0].length;
               lastIndex = currentIndex;
               break;
@@ -253,7 +313,8 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
         if (pendingContent) {
           output.push({
             ...currentFormatting,
-            content: pendingContent
+            content: pendingContent,
+            index: getAdjustedIndex(lastIndex)
           });
         }
 
@@ -267,8 +328,8 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
           // Handle smart closing tag [/]
           // Find the most recently opened tag by comparing with the previous node
           const previousNode = getLastCombiningRichNode(output, 1);
-          const currentTags = Object.keys(currentFormatting).filter(k => k !== 'content');
-          const previousTags = Object.keys(previousNode).filter(k => k !== 'content');
+          const currentTags = Object.keys(currentFormatting).filter(k => recognizedTags.includes(k as RecognizedTag));
+          const previousTags = Object.keys(previousNode).filter(k => recognizedTags.includes(k as RecognizedTag));
           
           // Find the most recently added tag by comparing current and previous formatting
           // We need to maintain the order of tags, so we should remove the last tag that was added
@@ -295,7 +356,8 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
   if (finalContent) {
     output.push({
       ...currentFormatting,
-      content: finalContent
+      content: finalContent,
+      index: getAdjustedIndex(lastIndex)
     });
   }
 
@@ -304,7 +366,17 @@ export function parseBBCode(input: string, useMarkdown: boolean): RichNode[] {
 
 export function buildBBCode(input: RichNode[]): string {
   let output = "";
-  let clampedInput = [...input, { content: "" }]
+  
+  // Delete excess keys from each node; input could be IndexedRichNode for example.
+  // Also add a sentinel node to the end of the array. It'll close all tags.
+  let clampedInput = [...input.map(node => {
+    return Object.keys(node)
+      .filter(key => [...recognizedTags, "content"].includes(key))
+      .reduce((acc, key) => {
+        acc[key as keyof RichNode] = node[key as keyof typeof node];
+        return acc;
+      }, {} as RichNode);
+  }), { content: "" }];
 
   for (let i = 0; i < clampedInput.length; i++) {
     const node = clampedInput[i];
@@ -324,7 +396,7 @@ export function buildBBCode(input: RichNode[]): string {
         // We have to collect all of the keys we're going to open,
         // And then search forwards through the nodes to find candidates for closing tags -- The first time that we don't see a key, we mark the order for that key.
         // We then ignore it for subsequent keys.
-        const keys = Object.keys(node).filter(k => k !== 'content') as (keyof CombiningRichNode)[];
+        const keys = Object.keys(node).filter(k => recognizedTags.includes(k as RecognizedTag)) as (keyof CombiningRichNode)[];
         const processedKeys = new Set<typeof keys[number]>();
         
         // Look ahead one node at a time and add tags as we find them
@@ -349,7 +421,7 @@ export function buildBBCode(input: RichNode[]): string {
       // If the previous node is a CombiningRichNode, we must close all of the tags in the order they were opened.
       if (i>0 && ("content" in clampedInput[i-1])) {
         // This is the same as the previous section, but we're searching backwards.
-        const keys = Object.keys(clampedInput[i-1]).filter(k => k !== 'content') as (keyof CombiningRichNode)[];
+        const keys = Object.keys(clampedInput[i-1]).filter(k => recognizedTags.includes(k as RecognizedTag)) as (keyof CombiningRichNode)[];
         const processedKeys = new Set<typeof keys[number]>();
         
         // Search backwards through the nodes to find candidates for closing tags
@@ -370,7 +442,7 @@ export function buildBBCode(input: RichNode[]): string {
       }
 
       // Writing in the ExclusiveRichNode itself can be self-contained.
-      const tag = Object.keys(node)[0] as keyof typeof node;
+      const tag = Object.keys(node).filter(k => exclusiveTags.includes(k as ExclusiveTag))[0] as keyof typeof node;
       output += `[${tag}]${node[tag]}[/${tag}]`;
     }
   } 
@@ -397,23 +469,23 @@ function getNextCombiningRichNode(nodes: RichNode[], offset: number = 0, startIn
   return { content: "" };
 }
 
-function trimFormatting<T extends RichNode>(formatting: T): T {
-  // I don't know why I bothered making it generic over RichNode because only CombiningRichNode has any false keys.
+function trimFormatting<T extends Record<string, any>>(formatting: T): T {
+  // Remove all falsy keys. I sure hope this works...
   const trimmed = { ...formatting };
   for (const key in trimmed) {
-    if (key !== "content" && !trimmed[key as keyof T]) {
-      delete trimmed[key as keyof T];
+    if (recognizedTags.includes(key as RecognizedTag) && !trimmed[key]) {
+      delete trimmed[key];
     }
   }
   return trimmed;
 }
 
 // Add this function after the other functions
-export function compactRichNodes(nodes: RichNode[]): RichNode[] {
+export function compactRichNodes<T extends (IndexedRichNode | RichNode)>(nodes: T[]): T[] {
   if (nodes.length <= 1) return nodes;
   
-  const result: RichNode[] = [];
-  let current: RichNode | null = null;
+  const result: T[] = [];
+  let current: T | null = null;
   
   for (const node of nodes) {
     // Handle ExclusiveRichNodes - they can't be combined
@@ -433,13 +505,12 @@ export function compactRichNodes(nodes: RichNode[]): RichNode[] {
     // Only attempt to combine if both are CombiningRichNodes
     if ("content" in current) {
       // Check if formatting matches
-      const currentKeys = Object.keys(current).filter(k => k !== 'content');
-      const nodeKeys = Object.keys(node).filter(k => k !== 'content');
+      const currentKeys = Object.keys(current).filter(k => recognizedTags.includes(k as RecognizedTag));
+      const nodeKeys = Object.keys(node).filter(k => recognizedTags.includes(k as RecognizedTag));
       
       const formattingMatches = 
         currentKeys.length === nodeKeys.length &&
         currentKeys.every(key => 
-          key === 'content' || 
           current![key as keyof typeof current] === node[key as keyof typeof node]
         );
       
