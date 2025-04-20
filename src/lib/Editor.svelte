@@ -5,15 +5,7 @@
   let { textRaw, textFormatted, send } = $props<{ textRaw: string, textFormatted: string, send: (text: string) => void }>();
 
   let textbox: HTMLElement & ElementContentEditable;
-  let isInitialized = false;
-
-  // Initialize the textbox content only once
-  $effect(() => {
-    if (textbox && !isInitialized) {
-      textbox.textContent = textRaw;
-      isInitialized = true;
-    }
-  });
+  let textSelection: undefined | { start: number, end: number };
 
   function sendProxy(raw: string) {
     send(buildBBCode(parseBBCode(raw, true)));
@@ -35,27 +27,12 @@
     }
   }
 
-  function oninput(event: Event) {
-    const target = event.target as HTMLElement;
-    
-    // Save cursor position before updating textRaw
-    const selection = window.getSelection();
-    if (selection && textbox.contains(selection.anchorNode)) {
-      textbox.dataset.selectionStart = getTextOffset(selection.anchorNode, selection.anchorOffset).toString();
-      textbox.dataset.selectionEnd = getTextOffset(selection.focusNode, selection.focusOffset).toString();
-      textbox.dataset.isCollapsed = selection.isCollapsed.toString();
-    }
-    
-    textRaw = target.textContent || '';
-  }
-
   function generateFormatter(tag: string) {
     return () => {
       let selection = window.getSelection();
       if (!selection || !textbox.contains(selection.anchorNode)) return;
 
       // Save the selection range information
-      const isCollapsed = selection.isCollapsed;
       const selectionStart = Math.min(
         getTextOffset(selection.anchorNode, selection.anchorOffset),
         getTextOffset(selection.focusNode, selection.focusOffset)
@@ -75,9 +52,7 @@
                 textRaw.slice(selectionEnd);
 
       // Store the new cursor/selection position for preview to restore
-      textbox.dataset.selectionStart = (selectionStart + openTag.length).toString();
-      textbox.dataset.selectionEnd = (selectionEnd + openTag.length).toString();
-      textbox.dataset.isCollapsed = isCollapsed.toString();
+      textSelection = { start: selectionStart + openTag.length, end: selectionEnd + openTag.length };
     };
   }
 
@@ -110,25 +85,19 @@
 
   function preview() {
     // Save selection information from either the current selection or stored data
-    let selectionStart = 0;
-    let selectionEnd = 0;
-    let isCollapsed = true;
-    
+    let savedSelection = textSelection;
     const selection = window.getSelection();
-    if (selection && textbox.contains(selection.anchorNode)) {
-      selectionStart = getTextOffset(selection.anchorNode, selection.anchorOffset);
-      selectionEnd = getTextOffset(selection.focusNode, selection.focusOffset);
-      isCollapsed = selection.isCollapsed;
-    } else if (textbox.dataset.selectionStart) {
-      selectionStart = parseInt(textbox.dataset.selectionStart);
-      selectionEnd = parseInt(textbox.dataset.selectionEnd);
-      isCollapsed = textbox.dataset.isCollapsed === 'true';
+    if (!savedSelection) {
+      if (selection && textbox.contains(selection.anchorNode)) {
+        savedSelection = {
+          start: getTextOffset(selection.anchorNode, selection.anchorOffset),
+          end: getTextOffset(selection.focusNode, selection.focusOffset),
+        };
+      }
     }
 
     // Clear the stored selection data
-    delete textbox.dataset.selectionStart;
-    delete textbox.dataset.selectionEnd;
-    delete textbox.dataset.isCollapsed;
+    textSelection = undefined;
 
     // Format the text as before
     const nodes = parseBBCode(textRaw, true);
@@ -148,15 +117,12 @@
     textbox.innerHTML = virtualText;
 
     // Always restore selection, even for collapsed cursor
-    const range = document.createRange();
-    const startPos = findTextPosition(selectionStart);
-    const endPos = findTextPosition(selectionEnd);
-    
-    if (startPos && endPos) {
-      range.setStart(startPos.node, startPos.offset);
-      range.setEnd(endPos.node, endPos.offset);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
+    if (selection && savedSelection) {
+      const startPos = findTextPosition(savedSelection.start);
+      const endPos = findTextPosition(savedSelection.end);
+      if (startPos && endPos) {
+        selection.setBaseAndExtent(startPos.node, startPos.offset, endPos.node, endPos.offset);
+      }
     }
   }
 
@@ -191,7 +157,7 @@
       id="textbox"
       contenteditable="true"
       bind:this={textbox}
-      {oninput}
+      bind:textContent={textRaw}
       {onkeydown}
       role="textbox"
       aria-multiline="true"
