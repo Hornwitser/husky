@@ -135,10 +135,10 @@ describe('BBCode Parser and Builder', () => {
       expect(parseBBCode(input, false)).toEqual(expected);
     });
 
-    it('should handle character_icon tags', () => {
-      const input = '[character_icon]John[/character_icon] Normal text';
+    it('should handle icon tags', () => {
+      const input = '[icon]John[/icon] Normal text';
       const expected: IndexedRichNode[] = [
-        { character_icon: 'John', index: 16 },
+        { icon: 'John', index: 16 },
         { content: ' Normal text', index: 37 }
       ];
       expect(parseBBCode(input, false)).toEqual(expected);

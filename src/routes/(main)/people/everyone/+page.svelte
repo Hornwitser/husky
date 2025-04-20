@@ -20,32 +20,34 @@
     gender: string;
   };
 
-  let recents: TCharacter[] = [];
+  let recents = $state<TCharacter[]>([]);
 
-  $: if ($currentSession)
-    getRecents($currentSession).then((v) => (recents = v));
-  $: populatedRecents = recents.map((v) => {
+  $effect(() => {
+    if ($currentSession) {
+      getRecents($currentSession).then((v) => (recents = v));
+    }
+  });
+
+  const populatedRecents = $derived(recents.map((v) => {
     let char = $characters[v] ?? {};
     return {
       character: v,
       status: char.status ?? "offline",
       gender: char.gender ?? "none",
     };
-  });
-  $: bookmarksWithStatus = $bookmarks.map((v) => {
-    return {
-      character: v,
-      status: $characters[v]?.status ?? "offline",
-      gender: $characters[v]?.gender ?? "none",
-    };
-  });
-  $: friendsWithStatus = $friends.map((v) => {
-    return {
-      character: v,
-      status: $characters[v]?.status ?? "offline",
-      gender: $characters[v]?.gender ?? "none",
-    };
-  });
+  }));
+
+  const bookmarksWithStatus = $derived($bookmarks.map((v) => ({
+    character: v,
+    status: $characters[v]?.status ?? "offline",
+    gender: $characters[v]?.gender ?? "none",
+  })));
+
+  const friendsWithStatus = $derived($friends.map((v) => ({
+    character: v,
+    status: $characters[v]?.status ?? "offline",
+    gender: $characters[v]?.gender ?? "none",
+  })));
 
   // Now merge and sort all of the arrays, with the following rules.
   // Sort first: Looking, online, {away, idle}, busy, do-not-disturb
@@ -60,6 +62,7 @@
     idle: 2,
     busy: 3,
   };
+
   function merge(a1: CharacterData[], a2: CharacterData[]): CharacterData[] {
     let newBounds = a1.length + a2.length;
     let newArray: CharacterData[] = new Array(newBounds);
@@ -91,6 +94,7 @@
     newArray.length = newBounds;
     return newArray;
   }
+
   function compare(v1: CharacterData, v2: CharacterData): number {
     let s1 = statusValues[v1.status];
     let s2 = statusValues[v2.status];
@@ -98,16 +102,17 @@
   }
 
   // TODO: Fix sorting; it's broken and I don't know why.
-  $: sortedAll = uniqWith(
+  const sortedAll = $derived(uniqWith(
     [
       friendsWithStatus.sort(compare),
       bookmarksWithStatus.sort(compare),
       populatedRecents.sort(compare),
     ].reduce(merge),
     (a: CharacterData, b: CharacterData) => a.character == b.character
-  );
-  $: sortedOnline = sortedAll.filter((v) => v.status !== "offline");
-  $: sortedOffline = sortedAll.filter((v) => v.status === "offline");
+  ));
+
+  const sortedOnline = $derived(sortedAll.filter((v) => v.status !== "offline"));
+  const sortedOffline = $derived(sortedAll.filter((v) => v.status === "offline"));
 
   onMount(() => {
     syncBookmarks();

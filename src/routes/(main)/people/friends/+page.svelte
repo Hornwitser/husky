@@ -3,9 +3,21 @@
   import { onMount } from "svelte";
   import Character from "../Character.svelte";
 
-  $: friendsWithStatus = $friends.map((v) => {return { character: v, status: $characters[v]?.status??"offline", gender: $characters[v]?.gender??"none" }});
-  $: groupOnlineFriends = friendsWithStatus.filter((v) => v.status !== "offline");
-  $: groupOfflineFriends = friendsWithStatus.filter((v) => v.status === "offline");
+  const friendsWithStatus = $derived(
+    $friends.map((v) => ({
+      character: v,
+      status: $characters[v]?.status ?? "offline",
+      gender: $characters[v]?.gender ?? "none"
+    }))
+  );
+
+  const groupOnlineFriends = $derived(
+    friendsWithStatus.filter((v) => v.status !== "offline")
+  );
+
+  const groupOfflineFriends = $derived(
+    friendsWithStatus.filter((v) => v.status === "offline")
+  );
 
   onMount(() => {
     syncFriends();

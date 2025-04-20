@@ -1,5 +1,5 @@
 // This is where I'm packing all of the functions for talking to Tauri backend
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "@tauri-apps/api/core";
 import { sessions } from "$lib/session";
 import type { Channel, ChannelData, Character, CharacterData, Message, MessageChannel, MessageTarget } from "$lib/types";
 
@@ -54,7 +54,7 @@ export function getRecents(character: Character): Promise<Character[]> {
 
 // Session functions (all take session)
 export async function sendMessage(session: Character, target: MessageTarget, message: string) {
-  await invoke("session_send_message", { session, target, message });
+  await invoke("send_message", { session, target, message });
 }
 
 export async function sendDice(session: Character, target: MessageTarget, dice: string) {

@@ -3,9 +3,21 @@
   import { onMount } from "svelte";
   import Character from "../Character.svelte";
 
-  $: bookmarksWithStatus = $bookmarks.map((v) => {return { character: v, status: $characters[v]?.status??"offline", gender: $characters[v]?.gender??"none" }});
-  $: groupOnlineBookmarks = bookmarksWithStatus.filter((v) => v.status !== "offline");
-  $: groupOfflineBookmarks = bookmarksWithStatus.filter((v) => v.status === "offline");
+  const bookmarksWithStatus = $derived(
+    $bookmarks.map((v) => ({
+      character: v,
+      status: $characters[v]?.status ?? "offline",
+      gender: $characters[v]?.gender ?? "none"
+    }))
+  );
+
+  const groupOnlineBookmarks = $derived(
+    bookmarksWithStatus.filter((v) => v.status !== "offline")
+  );
+
+  const groupOfflineBookmarks = $derived(
+    bookmarksWithStatus.filter((v) => v.status === "offline")
+  );
 
   onMount(() => {
     syncBookmarks();

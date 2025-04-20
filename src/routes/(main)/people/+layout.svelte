@@ -1,15 +1,62 @@
 <!-- This is the default page, *and* it's the People screen -->
 <script lang="ts">
-  import type { LayoutData } from './$types';
-  import { goto } from '$app/navigation';
+  import type { LayoutData } from "./$types";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
 
+  const props = $props<{ data: LayoutData, children: () => any }>();
+  const currentPath = $derived($page.url.pathname);
 
-  export let data: LayoutData;
-
-  async function select(tab: string) {
-    await goto(`/people/${tab}`)
-  }
+  const gotoEveryone = () => goto("/people/everyone");
+  const gotoFriends = () => goto("/people/friends");
+  const gotoBookmarks = () => goto("/people/bookmarks");
+  const gotoSearch = () => goto("/people/search");
 </script>
+
+<div id="root">
+  <div id="header">
+    <h2>People</h2>
+    <nav id="button-row">
+      <button
+        type="button"
+        class="nav-button"
+        class:selected={currentPath === "/people/everyone"}
+        onclick={gotoEveryone}
+      >
+        Everyone
+      </button>
+      <button
+        type="button"
+        class="nav-button"
+        class:selected={currentPath === "/people/friends"}
+        onclick={gotoFriends}
+      >
+        Friends
+      </button>
+      <button
+        type="button"
+        class="nav-button"
+        class:selected={currentPath === "/people/bookmarks"}
+        onclick={gotoBookmarks}
+      >
+        Bookmarks
+      </button>
+      <div class="spreader"></div>
+      <button
+        type="button"
+        class="nav-button"
+        class:selected={currentPath === "/people/search"}
+        onclick={gotoSearch}
+      >
+        <img src="/fa/magnifying-glass.svg" alt="Search">
+        Character Search
+      </button>
+    </nav>
+  </div>
+  <div id="content"> 
+    {@render props.children()}
+  </div>
+</div>
 
 <style lang="scss">
   #root {
@@ -32,14 +79,6 @@
     flex-grow: none;
     flex-basis: content;
     bottom: 0px;
-
-    > * {
-      flex: 0 0 auto;
-    }
-
-    *:first-child {
-      margin-top: 0px;
-    }
 
     &::-webkit-scrollbar {
       position: absolute;
@@ -80,6 +119,7 @@
       margin-top: 2px;
     }
   }
+
   #button-row {
     display: flex;
     flex-direction: row;
@@ -87,7 +127,8 @@
     gap: 8px;
     align-self: stretch;
   }
-  .button {
+
+  .nav-button {
     box-sizing: border-box;
     display: flex;
     flex-direction: row;
@@ -101,6 +142,9 @@
     background: var(--color-gray-10);
     border: 1px solid var(--color-gray-9);
     border-radius: 2px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
 
     &.selected {
       background: var(--color-gray-9);
@@ -110,40 +154,13 @@
       width: 14px;
       height: 14px;
     }
+
+    &:hover:not(.selected) {
+      background: var(--color-gray-9);
+    }
   }
+
   .spreader {
     flex: 1;
   }
 </style>
-
-<div id="root">
-  <div id="header">
-    <h2>People</h2>
-    <div id="button-row">
-      <div class="clickable button" class:selected={data.currentTab==="everyone"} id="button-everyone" on:click={()=>select("everyone")}>
-        <img src="/fa/circle-check.svg" alt="">
-        Everyone
-      </div>
-      <div class="clickable button" class:selected={data.currentTab==="recent"} id="button-recent" on:click={()=>select("recent")}>
-        <img src="/fa/clock.svg" alt="">
-        Recent
-      </div>
-      <div class="clickable button" class:selected={data.currentTab==="friends"} id="button-friends" on:click={()=>select("friends")}>
-        <img src="/fa/user-group-solid.svg" alt="">
-        Friends
-      </div>
-      <div class="clickable button" class:selected={data.currentTab==="bookmarks"} id="button-bookmarks" on:click={()=>select("bookmarks")}>
-        <img src="/fa/bookmark.svg" alt="">
-        Bookmarks
-      </div>
-      <div class="spreader"></div>
-      <div class="clickable button" class:selected={data.currentTab==="search"} id="button-search" on:click={()=>select("search")}>
-        <img src="/fa/magnifying-glass.svg" alt="">
-        Character Search
-      </div>
-    </div>
-  </div>
-  <div id="content"> 
-    <slot/>
-  </div>
-</div>

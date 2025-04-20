@@ -1,19 +1,20 @@
 <script lang="ts">
   import { getAvatar } from "$lib/util";
-  import { createEventDispatcher } from "svelte";
-  export let character: string;
 
-  const dispatcher = createEventDispatcher();
+  const { character, choice } = $props<{
+    character: string;
+    choice: (e: { character: string }) => Promise<void>;
+  }>();
 
-  function handleClick() {
-    dispatcher("choice", { character });
+  async function onclick() {
+    await choice({ character });
   }
 </script>
 
-<div class="char-container" on:click={handleClick}>
+<button class="char-container" {onclick} type="button">
   <img alt="Character Avatar" src={getAvatar(character)} />
   <p>{character}</p>
-</div>
+</button>
 
 <style lang="scss">
   .char-container {
@@ -30,6 +31,8 @@
     border-radius: 4px;
 
     cursor: pointer;
+    font: inherit;
+    color: inherit;
   }
 
   * {

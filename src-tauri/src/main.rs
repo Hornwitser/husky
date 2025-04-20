@@ -12,7 +12,7 @@ use f_chat_rs::{
     protocol::Target,
 };
 use tauri::State;
-use tokio::sync::{mpsc::Sender, RwLock as AsyncRwLock};
+use tokio::sync::{RwLock as AsyncRwLock, mpsc::Sender};
 
 mod cache;
 mod data;
@@ -102,14 +102,11 @@ async fn get_all_characters(
         v.into_owned()
             .drain(..)
             .map(|v| {
-                (
-                    v.character,
-                    data::CharacterDataInner {
-                        status: v.status,
-                        gender: v.gender,
-                        status_message: v.status_message,
-                    },
-                )
+                (v.character, data::CharacterDataInner {
+                    status: v.status,
+                    gender: v.gender,
+                    status_message: v.status_message,
+                })
             })
             .collect()
     })
@@ -146,7 +143,7 @@ async fn get_sessions(client: ClientState<'_>) -> Result<Vec<Character>, ()> {
         client
             .get_sessions()
             .drain(..)
-            .map(|v| v.character.clone())
+            .map(|v| v.character)
             .collect()
     }))
 }
@@ -154,7 +151,7 @@ async fn get_sessions(client: ClientState<'_>) -> Result<Vec<Character>, ()> {
 #[tauri::command]
 async fn get_recents(character: Character) -> Result<Vec<Character>, ()> {
     Ok(vec![]) // For now, this is not backed by anything.
-               // Later, back this with a cache which is updated when messages are sent in DMs.
+    // Later, back this with a cache which is updated when messages are sent in DMs.
 }
 
 #[tauri::command]
@@ -187,9 +184,9 @@ enum MessageChannel {
     },
 }
 
-impl Into<f_data::MessageChannel> for MessageChannel {
-    fn into(self) -> f_data::MessageChannel {
-        match self {
+impl From<MessageChannel> for f_data::MessageChannel {
+    fn from(value: MessageChannel) -> Self {
+        match value {
             MessageChannel::Channel { channel } => f_data::MessageChannel::Channel(channel),
             MessageChannel::Character {
                 own_character,
@@ -200,7 +197,7 @@ impl Into<f_data::MessageChannel> for MessageChannel {
 }
 
 #[tauri::command]
-async fn session_send_message(
+async fn send_message(
     client: ClientState<'_>,
     session: Character,
     target: Target,
@@ -209,20 +206,17 @@ async fn session_send_message(
     let client_guard = client.client.read().await;
     let client = client_guard
         .as_ref()
-        .expect("Too optimistic (session_send_message)");
+        .expect("Too optimistic (send_message)");
 
-    let session = client
-        .get_session(&session)
-        .expect("Bad session provided (session_send_message)");
-    session
-        .send_message(target, message)
+    client
+        .send_message(&session, target, message)
         .await
-        .expect("Client error (session_send_message)");
+        .expect("Client error (send_message)");
     Ok(())
 }
 
 #[tauri::command]
-async fn session_send_dice(
+async fn send_dice(
     client: ClientState<'_>,
     session: Character,
     target: Target,
@@ -231,15 +225,15 @@ async fn session_send_dice(
     let client_guard = client.client.read().await;
     let client = client_guard
         .as_ref()
-        .expect("Too optimistic (session_send_dice)");
+        .expect("Too optimistic (send_dice)");
 
     let session = client
         .get_session(&session)
-        .expect("Bad session provided (session_send_dice)");
+        .expect("Bad session provided (send_dice)");
     session
         .send_dice(target, dice)
         .await
-        .expect("Client error (session_send_dice)");
+        .expect("Client error (send_dice)");
     Ok(())
 }
 
@@ -275,11 +269,13 @@ async fn main() {
     tauri::async_runtime::set(tokio::runtime::Handle::current());
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
         .manage(client)
         .manage(send)
         .setup(|app| {
             // Oh, and here's where I read off the receiver.
-            let handle = app.handle();
+            let handle = app.handle().clone();
             tokio::spawn(async move {
                 while let Some(event) = receive.recv().await {
                     event::handle_event(&handle, event).await;
@@ -300,8 +296,8 @@ async fn main() {
             get_sessions,
             get_recents,
             get_messages,
-            session_send_message,
-            session_send_dice,
+            send_message,
+            send_dice,
             session_join_channel
         ])
         .run(tauri::generate_context!())

@@ -5,10 +5,22 @@
   import Character from "../Character.svelte";
   import type { Character as TCharacter } from "$lib/types";
 
-  let recents: TCharacter[] = [];
+  let recents = $state<TCharacter[]>([]);
 
-  $: if ($currentSession) getRecents($currentSession).then((v) => recents = v);
-  $: populatedRecents = recents.map((v) => {let char = $characters[v] ?? {}; return { character: v, status: char.status??"offline", gender: char.gender??"none" }})
+  $effect(() => {
+    if ($currentSession) {
+      getRecents($currentSession).then((v) => recents = v);
+    }
+  });
+
+  const populatedRecents = $derived(recents.map((v) => {
+    let char = $characters[v] ?? {};
+    return {
+      character: v,
+      status: char.status ?? "offline",
+      gender: char.gender ?? "none"
+    };
+  }));
 </script>
 
 <style lang="scss">
@@ -22,7 +34,7 @@
 </style>
 
 <div id="recent" class="character-list">
-{#each populatedRecents as recent}
-  <Character {...recent}/>
-{/each}
+  {#each populatedRecents as recent}
+    <Character {...recent}/>
+  {/each}
 </div>

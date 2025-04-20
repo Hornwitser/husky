@@ -1,7 +1,6 @@
 import { derived, get, writable } from "svelte/store";
 import * as rust from "./rust";
-import type { MessageTarget } from "./rust";
-import type { Channel, Character } from "./types";
+import type { Channel, Character, MessageTarget } from "./types";
 import { browser } from "$app/environment";
 
 export const sessions = writable<string[]>([]);

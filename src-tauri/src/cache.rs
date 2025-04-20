@@ -78,16 +78,14 @@ impl f_chat_rs::cache::Cache for Cache {
             // If it already exists, it should be consistent.
             Ok(false)
         } else {
-            self.channels.insert(
-                channel.into_owned(),
-                CacheChannelData {
+            self.channels
+                .insert(channel.into_owned(), CacheChannelData {
                     mode: data.mode.unwrap_or_default(),
                     members: members.iter().cloned().collect(),
                     description: data.description.unwrap_or_default().into_owned(),
                     title: data.title.unwrap_or_default().into_owned(),
                     ops: DashSet::new(),
-                },
-            );
+                });
             Ok(true)
         }
     }

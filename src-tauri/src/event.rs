@@ -4,12 +4,12 @@ use chrono::Utc;
 use tokio::sync::mpsc::Sender;
 
 use f_chat_rs::{
-    client::{async_trait, EventListener},
+    client::{EventListener, async_trait},
     data::{Channel, Character, Message, MessageChannel, MessageContent},
     session::Session,
 };
 use serde::Serialize;
-use tauri::{Manager, Runtime};
+use tauri::{Emitter, Runtime};
 
 #[derive(Debug)]
 pub struct EventHandler {
@@ -47,14 +47,11 @@ impl EventListener for EventHandler {
         content: MessageContent,
     ) {
         self.update_emitter
-            .send(UpdateEvent::Message(
-                channel,
-                Message {
-                    character,
-                    content,
-                    timestamp: Utc::now(),
-                },
-            ))
+            .send(UpdateEvent::Message(channel, Message {
+                character,
+                content,
+                timestamp: Utc::now(),
+            }))
             .await
             .expect("Event failed (message)");
     }
@@ -93,14 +90,14 @@ pub struct MessageEvent {
     content: String,
 }
 
-pub async fn handle_event<R: Runtime>(handle: &impl Manager<R>, event: UpdateEvent) {
+pub async fn handle_event<R: Runtime>(handle: &impl Emitter<R>, event: UpdateEvent) {
     match event {
-        UpdateEvent::Bookmarks => handle.emit_all("update_bookmark", ()),
-        UpdateEvent::Channel(chan) => handle.emit_all("update_channel", chan),
-        UpdateEvent::Character(character) => handle.emit_all("update_character", character),
-        UpdateEvent::Friends => handle.emit_all("update_friends", ()),
+        UpdateEvent::Bookmarks => handle.emit("update_bookmark", ()),
+        UpdateEvent::Channel(chan) => handle.emit("update_channel", chan),
+        UpdateEvent::Character(character) => handle.emit("update_character", character),
+        UpdateEvent::Friends => handle.emit("update_friends", ()),
         UpdateEvent::Message(channel, message) => {
-            handle.emit_all("message", EventMessage { channel, message })
+            handle.emit("message", EventMessage { channel, message })
         }
     }
     .expect("Failed to emit event");

@@ -1,63 +1,68 @@
 <script lang="ts">
-  import CharacterIcon, { ICON_SMALL } from "$lib/CharacterIcon.svelte";
   import type { Character } from "$lib/types";
+  import CharacterIcon from "$lib/CharacterIcon.svelte";
   import { goto } from "$app/navigation";
 
-  export let character: Character;
-  export let status: string = "offline";
-  export let gender: string = "none";
+  const props = $props<{
+    character: Character;
+    status?: string;
+    gender?: string;
+  }>();
+
+  const status = props.status ?? "offline";
+  const gender = props.gender ?? "none";
+
+  const gotoPrivateMessage = async () => {
+    await goto(`/private-messages/${props.character}`);
+  };
 </script>
 
 <style lang="scss">
-  #character-container {
+  .character {
     display: flex;
-    flex-flow: row wrap;
+    flex-direction: row;
     align-items: center;
-    overflow: clip;
-    height: min-content;
-
-    padding: 0px;
-    padding-right: 12px;
-    gap: 8px;
-    max-width: fit-content;
+    padding: 0;
+    padding-right: 6px;
+    gap: 6px;
+    height: 36px;
+    width: fit-content;
 
     border-radius: 4px;
     background: rgba(67, 67, 67, 0.4);
     border: 1px solid var(--color-gray-9);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
 
-    font-size: 14px;
-    font-weight: 500;
+    &:hover {
+      background: rgba(67, 67, 67, 0.6);
+    }
 
-    &.gender-{
-      &none {
-        color: #BFBFBF;
-      }
-      &Male {
-        color: #3c9ae8;
-      }
-      &Male-herm {
-        color: #2b4acb;
-      }
-      &Herm {
-        color: #854eca;
-      }
-      &Shemale {
-        color: #ab7ae0;
-      }
-      &Female {
-        color: #e0529c;
-      }
-      &Cunt-boy {
-        color: #8bbb11;
-      }
-      &Transgender {
-        color: #d87a16;
-      }
+    &[data-gender="none"] { color: #BFBFBF; }
+    &[data-gender="Male"] { color: #3c9ae8; }
+    &[data-gender="Male-herm"] { color: #2b4acb; }
+    &[data-gender="Herm"] { color: #854eca; }
+    &[data-gender="Shemale"] { color: #ab7ae0; }
+    &[data-gender="Female"] { color: #e0529c; }
+    &[data-gender="Cunt-boy"] { color: #8bbb11; }
+    &[data-gender="Transgender"] { color: #d87a16; }
+
+    .character-name {
+      font-size: 14px;
+      font-weight: 500;
+      margin: 0;
+      white-space: nowrap;
     }
   }
 </style>
 
-<div id="character-container" class="clickable gender-{gender}" on:click={(e)=>goto(`/private-messages/${character}/`)}>
-  <CharacterIcon {character} {status} {...ICON_SMALL}/>
-  {character}
-</div>
+<button
+  type="button"
+  class="character"
+  data-gender={gender}
+  onclick={gotoPrivateMessage}
+>
+  <CharacterIcon character={props.character} {status} iconSize={34} statusSize={8} />
+  <p class="character-name">{props.character}</p>
+</button>

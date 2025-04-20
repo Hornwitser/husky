@@ -1,14 +1,4 @@
 <!-- Character selection screen -->
-<script lang="ts" context="module">
-  // Remember the recent characters too
-  const recentCharacters = writable<string[]>(browser ? JSON.parse(window.localStorage.getItem("characters")??"[]") : []);
-  if (browser) {
-    recentCharacters.subscribe((v) => {
-      window.localStorage.setItem("characters", JSON.stringify(v));
-    }) 
-  }
-</script>
-
 <script lang="ts">
   import { getOwnCharacters } from "$lib/rust";
   import { friends, syncFriends, characters, syncCharacters } from "$lib/data";
@@ -18,28 +8,45 @@
   import Characters from "./Characters.svelte";
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
-  import CharacterIcon, { ICON_SMALL } from "$lib/CharacterIcon.svelte";
+  import CharacterIcon from "$lib/CharacterIcon.svelte";
+  import { iconSizes } from "$lib/CharacterIcon.svelte";
+
+  // Remember the recent characters
+  const recentCharacters = writable<string[]>(
+    browser ? JSON.parse(window.localStorage.getItem("characters") ?? "[]") : []
+  );
+
+  if (browser) {
+    recentCharacters.subscribe((v) => {
+      window.localStorage.setItem("characters", JSON.stringify(v));
+    });
+  }
 
   // Characters list can't be gotten from page.ts
   // Svelte doesn't provide the "window" which causes Tauri to explode.
-  let own_characters: string[] = [];
-  let onlineFriends = derived([friends, characters], ([$friends, $characters]) => {
-    return $friends.filter((friend) => $characters[friend]?.status == "online");
-  })
+  let own_characters = $state<string[]>([]);
+  
+  const onlineFriends = derived([friends, characters], ([$friends, $characters]) => 
+    $friends.filter((friend) => $characters[friend]?.status === "online")
+  );
 
   onMount(async () => {
     own_characters = await getOwnCharacters();
     await syncFriends();
     await syncCharacters();
-  })
+  });
 
-  async function chooseCharacter(event: CustomEvent<{character:string}>) {
-    let newRecent = $recentCharacters.filter((v) => v!==event.detail.character);
-    if (newRecent.unshift(event.detail.character) > 6) newRecent.pop();
+  async function choice({ character }: { character: string }) {
+    let newRecent = $recentCharacters.filter((v) => v !== character);
+    if (newRecent.unshift(character) > 6) newRecent.pop();
     $recentCharacters = newRecent;
-    await startSession(event.detail.character);
+    await startSession(character);
     await goto("/people/everyone", {replaceState: true, state: []});
   }
+
+  const gotoPrivateMessage = (friend: string) => async () => {
+    await goto(`/private-messages/${friend}`);
+  };
 </script>
 
 <style lang="scss">
@@ -121,9 +128,13 @@
       flex-direction: row;
       gap: 8px;
 
-      * {
+      button {
         width: 32px;
         height: 32px;
+        padding: 0;
+        background: none;
+        border: none;
+        cursor: pointer;
       }
     }
   }
@@ -132,11 +143,11 @@
 <div id="characters-container">
   {#if $recentCharacters.length > 0}
     <div id="recent">
-      <Characters characters={$recentCharacters} on:choice={chooseCharacter}/>
+      <Characters characters={$recentCharacters} {choice}/>
     </div>
     <div id="divider"></div>
   {/if}
-  <Characters characters={own_characters} on:choice={chooseCharacter}/>
+  <Characters characters={own_characters} {choice}/>
 </div>
 {#if $onlineFriends.length > 0 }
   <div id="friends-container">
@@ -144,7 +155,9 @@
     <div id="friends">
       <!--Friends go in here-->
       {#each $onlineFriends as friend}
-        <CharacterIcon character={friend} {...ICON_SMALL}/>
+        <button onclick={gotoPrivateMessage(friend)}>
+          <CharacterIcon character={friend} {...iconSizes.small}/>
+        </button>
       {/each}
     </div>
   </div>

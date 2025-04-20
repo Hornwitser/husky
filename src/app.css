@@ -42,6 +42,11 @@
   -webkit-text-size-adjust: 100%;
 }
 
+/* Inline for formatting tags */
+/* span[class^="color-"], span[class^="icon"], span[class^="character"], span[class^="eicon"], b, i, sub, sup, u, s {
+  display: inline;
+} */
+
 a {
   font-weight: 500;
   color: #646cff;
@@ -52,6 +57,7 @@ a:hover {
   color: #24c8db;
 }
 
+/* Default button styles */
 input,
 button {
   border-radius: 8px;
@@ -62,17 +68,17 @@ button {
   font-family: inherit;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-
   color: #ffffff;
   background-color: #0f0f0f98;
 }
 
-body {
-  margin: 0px;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  flex: 0 0 auto;
+/* Reset styles for specific buttons */
+button {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
 }
 
 button {
@@ -83,9 +89,12 @@ button:hover {
   border-color: #396cd8;
 }
 
-input,
-button {
-  outline: none;
+body {
+  margin: 0px;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  flex: 0 0 auto;
 }
 
 .row {

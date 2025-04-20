@@ -1,28 +1,28 @@
 <script lang="ts">
-  import Sidebar from "./Sidebar.svelte";
   import type { LayoutData } from "./$types";
+  import Sidebar from "./Sidebar.svelte";
 
-  export let data: LayoutData;
+  const props = $props<{ data: LayoutData, children: () => any }>();
 </script>
-<style lang="scss">
-  #main-app {
-    display: grid;
-    grid-template-columns: 200px 1fr;
-    grid-template-areas: "sidebar main";
 
-    gap:0px;
-    padding:0px;
-  }
-  #main {
-    grid-area: main;
-    max-height: 100vh;
-    overflow: hidden;
-    overflow-x: clip;
-  }
-</style>
-<div id="main-app">
-  <Sidebar {...data}/>
+<div id="container">
+  <Sidebar people={props.data.people} character={props.data.character} channel={props.data.channel} />
   <div id="main">
-    <slot></slot>
+    {@render props.children()}
   </div>
 </div>
+
+<style lang="scss">
+  #container {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-areas: "sidebar main";
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  #main {
+    grid-area: main;
+    overflow: hidden;
+  }
+</style>

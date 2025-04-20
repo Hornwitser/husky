@@ -12,7 +12,7 @@ export type CharacterData = {
   statusMessage: string
 }
 export type MessageChannel = { own_character: Character, other_character: Character } | { channel: Channel };
-export type MessageTarget = { character: Character } | { channel: Channel }
+export type MessageTarget = { recipient: Character } | { channel: Channel }
 export type MessageContent
   = { type: "message", content: string }
   | { type: "emote", content: string }

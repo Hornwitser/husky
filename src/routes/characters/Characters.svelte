@@ -1,25 +1,23 @@
 <script lang="ts">
-  import { getAvatar } from "$lib/util";
   import Character from "./Character.svelte";
-  export let characters: string[];
 
-  function handleClick() {
-    
-  }
+  const { characters, choice } = $props<{
+    characters: string[];
+    choice: (e: { character: string }) => void;
+  }>();
 </script>
 
 <style lang="scss">
-  .chars-container {
+  #characters {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(96px + 24px, 1fr));
     grid-auto-rows: auto;
-
-    gap: 12px 12px;
+    gap: 12px;
   }
 </style>
 
-<div class="chars-container">
+<div id="characters">
   {#each characters as character}
-    <Character {character} on:choice />
+    <Character {character} {choice} />
   {/each}
 </div>

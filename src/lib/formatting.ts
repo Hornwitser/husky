@@ -28,7 +28,7 @@ export type BooleanTag = typeof booleanTags[number];
 const validColors = ["red", "orange", "yellow", "green", "cyan", "blue", "purple", "pink", "black", "brown", "white", "gray"] as const;
 export type ValidColor = typeof validColors[number];
 
-const exclusiveTags = ["eicon", "character", "character_icon"] as const;
+const exclusiveTags = ["eicon", "character", "icon"] as const;
 export type ExclusiveTag = typeof exclusiveTags[number];
 
 const recognizedTags = [...booleanTags, ...exclusiveTags, "noparse", "url", "color"] as const;
@@ -44,7 +44,7 @@ export type ContentNode = { content: string }
 export type ExclusiveRichNode = 
   | { eicon: string }
   | { character: string }
-  | { character_icon: string }
+  | { icon: string }
 export type CombiningRichNode = ContentNode & {[K in BooleanTag]?: boolean} & {
   noparse?: boolean, // This probably shouldn't actually appear, unless I want to apply code-formatting.
   url?: string,
@@ -84,7 +84,7 @@ const noparseClosing = /\[\/(noparse)?\]/
 // When parsing a tag associated with ExclusiveRichNode, insert the subsequent text into the ExclusiveRichNode, for example:
 // [eicon]test[/eicon] -> { eicon: "test" }
 // [character]test[/character] -> { character: "test" }
-// [character_icon]test[/character_icon] -> { character_icon: "test" }
+// [icon]test[/icon] -> { icon: "test" }
 // When parsing a tag associated with CombiningRichNode, insert the subsequent text into the CombiningRichNode, for example:
 // [b]test[/b] -> { b: true, content: "test" }
 // The same is true for Markdown tags, for example:
@@ -97,7 +97,7 @@ const noparseClosing = /\[\/(noparse)?\]/
 // - When we see a BBCode tag, we can immediately insert a new RichNode into the output array, using the subsequent text as the content, and adding the new formatting.
 // - When we see a closing tag, we do the same, but we clear the formatting associated with the tag.
 // - When we see a noparse tag, we can immediately skip to the closing noparse tag, and treat the text in between as a ContentNode.
-export function parseBBCode(input: string, useMarkdown: boolean): IndexedRichNode[] { 
+export function parseBBCode(input: string, useMarkdown: boolean = false): IndexedRichNode[] { 
   const output: IndexedRichNode[] = [];
   
   // First pass: Extract noparse sections and add sentinels
@@ -529,4 +529,58 @@ export function compactRichNodes<T extends (IndexedRichNode | RichNode)>(nodes: 
   if (current) result.push(current);
   
   return result;
+}
+
+function isCombiningRichNode(node: RichNode): node is CombiningRichNode {
+  return "content" in node;
+}
+
+function isExclusiveRichNode(node: RichNode): node is ExclusiveRichNode {
+  return !isCombiningRichNode(node);
+}
+
+export function intoHTML(node: RichNode): string {
+  if (isCombiningRichNode(node)) {
+    // We need to build the HTML according to the properties within. 
+    // It's straightforward for the boolean tags -- They just need opening and closing.
+    // For the color tag, we need to wrap the content in a span with the color.
+    // The span should get a class of "color-[color]", where color is the color from the node.
+    // For the url tag, we need to wrap the content in <a href="url">...</a>
+    const trimmed = trimFormatting(node);
+    let result = trimmed.content;
+    
+    // Handle boolean formatting tags
+    if (trimmed.b) result = `<b>${result}</b>`;
+    if (trimmed.i) result = `<i>${result}</i>`;
+    if (trimmed.u) result = `<u>${result}</u>`;
+    if (trimmed.s) result = `<s>${result}</s>`;
+    if (trimmed.sub) result = `<sub>${result}</sub>`;
+    if (trimmed.sup) result = `<sup>${result}</sup>`;
+    if (trimmed.spoiler) result = `<span class="spoiler">${result}</span>`; // There's no spoiler tag in HTML.
+    
+    // Handle color tag
+    if (trimmed.color) {
+      result = `<span class="color-${trimmed.color}">${result}</span>`;
+    }
+    
+    // Handle URL tag
+    if (trimmed.url) {
+      result = `<a href="${trimmed.url}">${result}</a>`;
+    }
+
+    // We don't handle noparse tags, because in F-Chat they're not rendered in a special way.
+    // This said, it may be nice in the future to render them as a code block.
+    
+    return result;
+  } else if (isExclusiveRichNode(node)) {
+    // We need special handling for each type of exclusive tag. There's no getting around this.
+    if ("eicon" in node) {
+      return `<img src="https://static.f-list.net/images/eicon/${node.eicon}.gif" alt="${node.eicon}" class="eicon" />`;
+    } else if ("character" in node) {
+      return `<a href="/private-messages/${node.character.toLowerCase()}" class="character">${node.character}</a>`;
+    } else if ("icon" in node) {
+      return `<img src="https://static.f-list.net/images/avatar/${node.icon.toLowerCase()}.png" alt="${node.icon}" class="icon" />`;
+    }
+  }
+  return ""; // What the fuck is that?
 }

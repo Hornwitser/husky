@@ -1,21 +1,175 @@
 <script lang="ts">
   import { sessions, currentSession } from "$lib/session";
-  import CharacterIcon, {
-    ICON_LARGE,
-    ICON_SMALL,
-  } from "$lib/CharacterIcon.svelte";
+  import CharacterIcon from "$lib/CharacterIcon.svelte";
   import { goto } from "$app/navigation";
   import type { Channel, Character } from "$lib/types";
 
-  export let people: boolean;
-  export let character: Character;
-  export let channel: Channel;
+  const props = $props<{
+    people: boolean;
+    character: Character;
+    channel: Channel;
+  }>();
 
-  let pmCharacter = "";
+  let pmCharacter = $state("");
 
-  $: mainCharacter = $currentSession!;
-  $: otherSessions = $sessions.slice(1);
+  const mainCharacter = $derived($currentSession!);
+  const otherSessions = $derived($sessions.slice(1));
+
+  const ICON_LARGE = {
+    iconSize: 56,
+    statusSize: 12
+  } as const;
+
+  const ICON_SMALL = {
+    iconSize: 32,
+    statusSize: 8
+  } as const;
+
+  const gotoCharacters = async () => {
+    await goto("/characters");
+  };
+
+  const gotoNewPM = async () => {
+    await goto(`/private-messages/${pmCharacter}/`);
+  };
 </script>
+
+<style lang="scss">
+  #sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 240px;
+    height: 100%;
+    background: var(--color-gray-11);
+    border-right: 1px solid var(--color-gray-12);
+  }
+
+  #character-header {
+    display: flex;
+    flex-direction: row;
+    padding: 12px;
+    gap: 12px;
+    border-bottom: 1px solid var(--color-gray-12);
+
+    a {
+      color: inherit;
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 500;
+      line-height: 22px;
+    }
+  }
+
+  #alt-characters {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .sidebar-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+
+    &:hover:not(:disabled) {
+      background-color: var(--color-gray-12);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    img {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  .add-button {
+    @extend .sidebar-button;
+  }
+
+  #sidebar-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 24px;
+
+    #people {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      text-decoration: none;
+      color: inherit;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: var(--color-gray-12);
+      }
+
+      &.selected {
+        background-color: var(--color-gray-9);
+      }
+
+      img {
+        width: 16px;
+        height: 16px;
+      }
+
+      p {
+        margin: 0;
+      }
+    }
+  }
+
+  .section-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+
+    h4 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 500;
+    }
+  }
+
+  #new-pm {
+    width: 100%;
+    padding: 4px 8px;
+    background: var(--color-gray-10);
+    border: 1px solid var(--color-gray-9);
+    border-radius: 4px;
+    color: inherit;
+    font: inherit;
+
+    &::placeholder {
+      color: var(--color-gray-7);
+    }
+  }
+
+  #sidebar-footer {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 12px;
+    border-top: 1px solid var(--color-gray-12);
+  }
+</style>
 
 <div id="sidebar">
   <div id="character-header">
@@ -27,35 +181,38 @@
         {#each otherSessions as session}
           <CharacterIcon character={session} {...ICON_SMALL} />
         {/each}
-        <div
-          class:clickable={true}
-          id="alt-character-button"
-          on:click={async () => await goto("/characters")}
+        <button
+          type="button"
+          class="add-button"
+          onclick={gotoCharacters}
+          title="Add Character"
         >
           <img src="/fa/plus.svg" alt="add" />
-        </div>
+        </button>
       </div>
     </div>
   </div>
   <div id="sidebar-main">
-    <div
+    <a
+      href="/people/everyone"
       id="people"
-      class:clickable={true}
-      class:selected={people}
-      on:click={() => goto("/people/everyone")}
+      class:selected={props.people}
     >
       <img src="/fa/user.svg" alt="person" />
       <p>People</p>
-    </div>
+    </a>
     <div id="private-messages">
       <div id="private-messages-header" class="section-header">
         <h4>Private Messages</h4>
-        <img
-          src="/fa/plus.svg"
-          alt="add"
-          class:clickable={true}
-          on:click={(e) => goto(`/private-messages/${pmCharacter}/`)}
-        />
+        <button
+          type="button"
+          class="add-button"
+          onclick={gotoNewPM}
+          title="Add Private Message"
+          disabled={!pmCharacter}
+        >
+          <img src="/fa/plus.svg" alt="add" />
+        </button>
       </div>
       <input
         placeholder="Character Name..."
@@ -67,244 +224,33 @@
     <div id="channels">
       <div id="channels-header" class="section-header">
         <h4>Channels</h4>
-        <img src="/fa/plus.svg" alt="add" class:clickable={true} />
+        <button
+          type="button"
+          class="add-button"
+          onclick={() => {}}
+          title="Add Channel"
+          disabled
+        >
+          <img src="/fa/plus.svg" alt="add" />
+        </button>
       </div>
     </div>
   </div>
   <div id="sidebar-footer">
-    <div id="settings">
+    <button type="button" class="sidebar-button" onclick={() => {}} title="Settings">
       <img src="/fa/gear.svg" alt="Settings" />
-    </div>
-    <div id="ads">
+    </button>
+    <button type="button" class="sidebar-button" onclick={() => {}} title="Ads">
       <img src="/fa/rectangle-ad.svg" alt="Ads" />
-    </div>
-    <div id="logs">
+    </button>
+    <button type="button" class="sidebar-button" onclick={() => {}} title="Logs">
       <img src="/fa/file-lines.svg" alt="Logs" />
-    </div>
-    <div id="console">
+    </button>
+    <button type="button" class="sidebar-button" onclick={() => {}} title="Console">
       <img src="/fa/terminal.svg" alt="Console" />
-    </div>
-    <div id="sign-out">
+    </button>
+    <button type="button" class="sidebar-button" onclick={() => {}} title="Sign Out">
       <img src="/fa/right-from-bracket.svg" alt="Sign-Out" />
-    </div>
+    </button>
   </div>
 </div>
-
-<style lang="scss">
-  #sidebar {
-    box-sizing: border-box;
-
-    grid-area: sidebar;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 0px;
-    gap: 8px;
-    width: 100%;
-    height: 100vh;
-
-    background-color: var(--color-gray-11);
-  }
-
-  #character-header {
-    box-sizing: border-box;
-
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    padding: 12px;
-    gap: 8px;
-
-    width: 100%;
-
-    background: var(--color-gray-12);
-    border-bottom: 1px solid var(--color-gray-10);
-
-    order: 0;
-  }
-
-  #sidebar-main {
-    display: flex;
-    flex-direction: column;
-    align-items: left;
-    gap: 8px;
-
-    width: 100%;
-    background-color: var(--color-gray-11);
-
-    flex: none;
-    flex-grow: 1;
-    order: 1;
-  }
-
-  #people {
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    padding: 0px;
-
-    background: var(--color-gray-10);
-    border: 1px solid var(--color-gray-9);
-    border-radius: 4px;
-
-    margin: 0px 12px;
-
-    &.selected {
-      background: var(--color-gray-9);
-
-      p {
-        font-weight: 700;
-      }
-    }
-
-    img {
-      filter: invert(100%);
-      height: 24px;
-      width: 24px;
-      margin: 6px 12px;
-
-      flex: none;
-      order: 0;
-      flex-grow: 0;
-    }
-
-    p {
-      margin: 0px;
-      user-select: none;
-
-      flex: none;
-      order: 1;
-      flex-grow: 1;
-
-      font-weight: 400;
-    }
-  }
-
-  #private-messages {
-    display: flex;
-    flex-direction: column;
-  }
-
-  #channels {
-    display: flex;
-    flex-direction: column;
-  }
-
-  #sidebar-footer {
-    box-sizing: border-box;
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-
-    align-items: center;
-    padding: 10px 12px;
-
-    width: 100%;
-
-    background: var(--color-gray-12);
-    border-top: 1px solid var(--color-gray-10);
-
-    order: 2;
-
-    img {
-      filter: invert(100%);
-      width: 16px;
-      height: 16px;
-    }
-
-    div {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-  }
-
-  #main-character {
-    width: 56px;
-    height: 56px;
-  }
-
-  #header-col {
-    display: flex;
-    flex-direction: column;
-    align-items: left;
-
-    a {
-      font-weight: 500;
-      font-size: 14px;
-      text-align: left;
-      align-self: stretch;
-      color: rgba(255, 255, 255, 0.97);
-    }
-  }
-
-  #alt-characters {
-    display: flex;
-    flex-direction: row;
-    gap: 8px;
-    align-self: stretch;
-
-    flex: none;
-    order: 1;
-    align-self: stretch;
-    flex-grow: 0;
-  }
-
-  .alt-character {
-    width: 32px;
-    height: 32px;
-
-    border-radius: 2px;
-  }
-
-  #alt-character-button {
-    box-sizing: border-box;
-    width: 32px;
-    height: 32px;
-
-    border: 2px dashed rgba(255, 255, 255, 0.6);
-    border-radius: 2px;
-
-    img {
-      filter: invert(100%);
-      opacity: 0.6;
-      position: relative;
-
-      width: 22px;
-      height: 22px;
-
-      left: calc(50% - 11px);
-      top: calc(50% - 11px);
-    }
-  }
-
-  .section-header {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    margin: 12px 12px 0px;
-
-    h4 {
-      margin: 0px;
-
-      flex: 1;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    img {
-      width: 12px;
-      height: 12px;
-      flex: none;
-    }
-  }
-
-  input {
-    box-sizing: border-box;
-
-    width: auto;
-    padding: 8px 12px;
-    margin: 0px 8px;
-    font-size: 12px;
-  }
-</style>

@@ -5,14 +5,27 @@
   import { currentSession } from "$lib/session";
   import type { PageData } from "./$types";
   import Messages from "$lib/Messages.svelte";
+  import { sendMessage } from "$lib/rust";
 
-  export let data: PageData;
+  const { data } = $props<{ data: PageData }>();
 
-  let thisCharacter = $currentSession!; // This is actually a really bad idea
+  // This is actually a really bad idea
   // I should be passing down the selected session from the layout where the sidebar is drawn
   // No sidebar? No session selection, therefore don't care.
   // Need a session but no sidebar? Put it in the path. Add another selector. Anything.
-  let characterData = $characters[data.character];
+  const thisCharacter = $derived($currentSession!);
+  const characterData = $derived($characters[data.character]);
+
+  let textRaw = $state("");
+  let textFormatted = $state("");
+
+  async function send(text: string) {
+    if (text.trim()) {
+      await sendMessage(thisCharacter, { recipient: data.character }, text);
+      textRaw = "";
+      textFormatted = "";
+    }
+  }
 </script>
 
 <div id="container" class="col">
@@ -24,7 +37,7 @@
     />
     <h3>{data.character}</h3>
     <img src="/fa/angle-down.svg" alt="info" id="info" />
-    <div class="spreader" />
+    <div class="spreader"></div>
     <div class="clickable">
       <img src="/fa/magnifying-glass.svg" alt="search" id="search" />
     </div>
@@ -43,7 +56,7 @@
   </div>
   <!-- Message input -->
   <div id="input">
-    <Editor />
+    <Editor {textRaw} {textFormatted} {send} />
   </div>
 </div>
 

@@ -7,19 +7,49 @@
 <script lang="ts">
   import { username, password, autoLogin } from "$lib/account";
   import { login } from "$lib/rust";
-  import { goto } from "$app/navigation"
+  import { goto } from "$app/navigation";
   import { onMount } from "svelte";
 
-  onMount(async () => {
-    if ($autoLogin) {
-      // I promise that if autoLogin is set, the credentials are set.
-      await doLogin();
+  let usernameValue = $state<string | null>(null);
+  let passwordValue = $state<string | null>(null);
+  let autoLoginValue = $state(false);
+
+  // Set up store subscriptions
+  $effect(() => {
+    const unsubUsername = username.subscribe(v => usernameValue = v);
+    const unsubPassword = password.subscribe(v => passwordValue = v);
+    const unsubAutoLogin = autoLogin.subscribe(v => autoLoginValue = v);
+    
+    return () => {
+      unsubUsername();
+      unsubPassword();
+      unsubAutoLogin();
+    };
+  });
+
+  $effect(() => {
+    if (autoLoginValue && usernameValue && passwordValue) {
+      doLogin();
     }
-  })
+  });
 
   async function doLogin() {
-    await login($username!, $password!);
+    await login(usernameValue!, passwordValue!);
     goto("/characters");
+  }
+
+  function oninput(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.name === 'username') {
+      username.set(input.value);
+    } else if (input.name === 'password') {
+      password.set(input.value);
+    }
+  }
+
+  function onsubmit(event: SubmitEvent) {
+    event.preventDefault();
+    doLogin();
   }
 </script>
 
@@ -78,11 +108,31 @@
 
 <div id="main" class="col">
   <h1>Husky</h1>
-  <input name="username" placeholder="Username" bind:value={$username}>
-  <input name="password" type="password" placeholder="Password" bind:value={$password}>
-  <div id="final-row" class="row">
-    <input type="checkbox" name="auto-login" id="auto-login" bind:checked={$autoLogin}>
-    <label for="auto-login"> Auto-login </label>
-    <button name="login" on:click={doLogin}> Sign In </button>
-  </div>
+  <form class="login-form" {onsubmit}>
+    <input 
+      type="text"
+      name="username"
+      placeholder="Username"
+      value={usernameValue ?? ''}
+      {oninput}
+    >
+    <input 
+      type="password"
+      name="password"
+      placeholder="Password"
+      value={passwordValue ?? ''}
+      {oninput}
+    >
+    <div id="final-row" class="row">
+      <input 
+        type="checkbox" 
+        name="auto-login" 
+        id="auto-login" 
+        checked={autoLoginValue} 
+        {oninput}
+      >
+      <label for="auto-login"> Auto-login </label>
+      <button type="submit"> Sign In </button>
+    </div>
+  </form>
 </div>
